@@ -92,9 +92,11 @@ they are separated by the distance between
 Unlocking Process
 -----------------
 
-Choose the MCU and signal pin in the GUI, then press start. You will
-see the "LED" in the display go red and you will hear a rapid low
-beep. Attempts to flash your ESC will stream up the text box.
+Choose the MCU, signal pin and probe, then press Start. The status panel
+shows what is happening and counts attempts. It automatically retries
+until success, including when contact is intermittent. Press Stop to
+cancel or change settings. Repeated errors update the status without
+filling the main window with identical logs.
 
 Now power on your ESC (preferably with no motor attached!) and then
 press the tips of the two dupont pins against the SWD pads. Listen for
@@ -102,10 +104,31 @@ a change in sound as the tool finds the MCU. The tone will rise in
 pitch and the "LED" in the display will go orange if it finds your
 MCU. If it can't find the MCU then try the pins the other way around.
 
-When the tool succeeds it plays a triple tone, says "Success!" and the
-LED goes green. Your MCU is now flashed with an AM32 bootloader. You
-can how use the normal AM32 config tools to load the right firmware
-for your ESC and change settings.
+After programming, OpenOCD verifies the bootloader and reads the entire
+programmed image back to a file. The application compares every byte with
+the selected bootloader. Success requires that comparison, the explicit
+verification completion markers and a successful OpenOCD exit.
+
+If contact is lost after writing completes, retries only reconnect and
+verify; they do not erase or rewrite the ESC unless a mismatch is reported.
+Keep the probe on the same ESC until success. Setup problems and unknown
+errors also keep retrying, with an explanation on screen; use Stop to
+change the MCU, probe or file selection.
+
+On verified success the LED turns green, a completion tone plays, and a
+popup says **Success - press Space for next ESC**. All programming stops
+while this popup is open. Press **Space** or click **Next ESC (Space)** to
+begin a three-second countdown: **3, 2, 1**, with one beep per second when
+Sound is enabled. Move the probe to the next ESC during the countdown;
+programming then starts with the same settings. **Stop** cancels the
+countdown. **Done** closes the popup without restarting; the main **Next
+ESC** button also starts the countdown. The completed count is for this session.
+
+This checks that the selected **bootloader** was stored correctly. It does
+not check that the selected MCU/pin image suits your board, or install or
+validate the main ESC firmware. Use the normal AM32 configuration tools
+to load that firmware afterwards. Lock mode reports completion of the
+lock script, without claiming a bootloader readback verification.
 
 Troubleshooting
 ---------------
@@ -119,9 +142,33 @@ Install from https://zadig.akeo.ie/
 Diagnostics
 -----------
 
-When it doesn't work you should find a file esc_unlocker.log in the
-directory when you launched the unlocker. Share this file on the AM32
-discord to see if someone can help.
+The main window shows concise status changes. Enable **Show diagnostic
+details** to see the last 500 lines of raw OpenOCD output. Full diagnostic
+output goes to `esc_unlocker.log` at the path shown in the window, rotating
+at 5 MB with three backups. If the working directory is read-only, logs go
+to `AM32-unlocker-logs` in your home directory.
+
+Running and building this version
+---------------------------------
+
+Run `python esc_unlocker.py` with Python 3 and `intelhex` installed.
+Audio is optional (`numpy` and `sounddevice`). Resources are resolved
+relative to the application, so it can be launched from another folder.
+
+To build a Windows executable in an isolated environment:
+
+```
+python -m venv .venv
+.venv\Scripts\python -m pip install pyinstaller sounddevice setuptools intelhex numpy
+.venv\Scripts\python package/build.py
+```
+
+The output is `esc_unlocker_windows.exe`. On Linux/macOS, use the
+corresponding environment's Python executable with `package/build.py`.
+
+Run the simulated workflow and GUI checks with
+`python -m unittest discover -s tests -v`. The GUI checks require Tk and a
+display; they use a fake programmer and never open a debug probe.
 
 CAUTION
 -------

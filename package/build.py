@@ -4,6 +4,11 @@ import subprocess
 import sys
 import platform
 import shutil
+import shlex
+from pathlib import Path
+
+# Use this checkout and this Python environment, including on UNC shares.
+os.chdir(Path(__file__).resolve().parents[1])
 
 is_windows = platform.system() == "Windows"
 is_macos = platform.system() == "Darwin"
@@ -12,7 +17,7 @@ is_macos = platform.system() == "Darwin"
 MCUPath = "MCU"
 
 # Initialize the options for PyInstaller
-options = "--onefile --windowed --collect-all sounddevice --add-data bootloaders:bootloaders --add-data probes:probes"
+options = "--noconfirm --onefile --windowed --collect-all sounddevice --add-data bootloaders:bootloaders --add-data probes:probes"
 
 if is_windows:
     options += " --add-data=tools/windows:tools/windows"
@@ -20,11 +25,6 @@ elif is_macos:
     options += " --add-data=tools/macos:tools/macos"
 else:
     options += " --add-data=tools/linux:tools/linux"
-
-try:
-    shutil.rmtree("dist")
-except Exception:
-    pass
 
 # Get the list of subdirectories in the MCU directory
 if os.path.exists(MCUPath):
@@ -35,14 +35,14 @@ if os.path.exists(MCUPath):
         mcu_dir = os.path.join(MCUPath, m)
         if os.path.isdir(mcu_dir):
             print(f"Adding MCU {m}")
-            options += f" --add-data \"{mcu_dir}:{mcu_dir}\""
+            options += f" --add-data \"{Path(mcu_dir).as_posix()}:{Path(mcu_dir).as_posix()}\""
 else:
     print(f"Error: The directory '{MCUPath}' does not exist.")
     sys.exit(1)
 
 # Run PyInstaller with the accumulated options
 try:
-    subprocess.run(f"python -m PyInstaller {options} esc_unlocker.py", shell=True, check=True)
+    subprocess.run([sys.executable, "-m", "PyInstaller", *shlex.split(options), "esc_unlocker.py"], check=True)
 except subprocess.CalledProcessError as e:
     print(f"Error: PyInstaller failed with exit code {e.returncode}")
     sys.exit(1)
