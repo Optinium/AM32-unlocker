@@ -42,10 +42,10 @@ Success requires an exit code of zero, explicit verification/readback markers an
 an exact byte comparison of a fresh readback against a snapshot of the chosen
 image. A zero exit code or legacy `Success!` message alone is insufficient.
 
-A successful run returns before the popup opens. The popup waits for Space or
-Next ESC, then shows a three-second countdown with one beep per second before
-starting a new run with the same selections. Stop/Quit cancel the countdown;
-Done only dismisses the popup. Tk `after` schedules the countdown without blocking.
+A successful run returns before the popup opens. Success automatically starts
+a three-second countdown with one beep per second before starting the next ESC
+with the same selections. Stop/Quit, Escape or closing the popup cancel the
+countdown. There is no Space confirmation. Tk `after` keeps the UI responsive.
 Each attempt has a 60-second timeout, and Stop/Quit terminate and reap the child.
 Setup and unknown errors keep retrying with readable status messages.
 

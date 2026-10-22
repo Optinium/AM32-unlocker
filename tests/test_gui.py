@@ -76,11 +76,6 @@ class GuiTests(unittest.TestCase):
                                         message='All bytes match.', attempts=1)
         self.drain()
 
-    def press_space(self):
-        binding = self.app.dialog.bind('<KeyRelease-space>')
-        callback = binding.split('[', 1)[1].split()[0]
-        self.root.tk.call(callback, *(['0'] * 19))
-
     def test_double_start_and_settings_locked_while_running(self):
         self.app.start()
         self.app.start()
@@ -90,29 +85,26 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(self.app.start_button.instate(['disabled']))
         self.assertTrue(all(widget.instate(['disabled']) for widget in self.app.settings_widgets))
 
-    def test_success_waits_for_space_and_preserves_selections(self):
+    def test_success_automatically_counts_down_and_preserves_selections(self):
         self.app.mcu.set('F051')
         self.app.pin.set('PB4')
         self.app.start()
         self.drain()
         first = FakeProgrammer.instances[0]
-        first.emit('finished', outcome='success', message='All bytes match.', attempts=1)
-        self.drain()
-        self.assertFalse(self.app.running)
-        self.assertEqual(self.app.completed, 1)
-        self.assertIsNotNone(self.app.dialog)
-        self.assertIn('press Space', self.app.dialog.title())
-        self.app.start()  # Cannot start behind the success popup.
-        self.assertEqual(len(FakeProgrammer.instances), 1)
-        # Invoke the actual Space binding without bringing a test window to front.
         self.app.sound.set(True)
         self.app.audio.play.reset_mock()
         with patch.object(self.root, 'after', wraps=self.root.after) as schedule:
-            self.press_space()
+            first.emit('finished', outcome='success', message='All bytes match.', attempts=1)
+            self.drain()
+            self.assertFalse(self.app.running)
+            self.assertEqual(self.app.completed, 1)
+            self.assertIsNotNone(self.app.dialog)
+            self.assertIn('automatically', self.app.dialog.title())
             self.assertTrue(self.app.countdown_active)
-            self.assertIsNone(self.app.dialog)
             self.assertEqual(len(FakeProgrammer.instances), 1)
             self.assertIn('3...', self.app.status.get())
+            self.assertIn('3...', self.app.countdown_text.get())
+            self.assertTrue(all(widget.instate(['disabled']) for widget in self.app.settings_widgets))
             self.app.begin_countdown()  # Repeated activation must not add timers/beeps.
             self.app.start()  # Cannot bypass the countdown with Start.
             self.advance_countdown()
@@ -123,7 +115,8 @@ class GuiTests(unittest.TestCase):
             self.assertEqual(len(FakeProgrammer.instances), 1)
             self.assertEqual(self.app.audio.play.call_count, 3)
             self.advance_countdown()
-            self.assertEqual([call.args[0] for call in schedule.call_args_list], [1000, 1000, 1000])
+            self.assertEqual([call.args[0] for call in schedule.call_args_list
+                              if call.args[1] == self.app.countdown_tick], [1000, 1000, 1000])
         self.drain()
         self.assertIsNone(self.app.dialog)
         self.assertFalse(self.app.countdown_active)
@@ -133,7 +126,6 @@ class GuiTests(unittest.TestCase):
 
     def test_stop_cancels_countdown_and_next_can_restart_it(self):
         self.complete_first_esc()
-        self.press_space()
         timer = self.app.countdown_after_id
         self.app.stop()
         self.assertFalse(self.app.countdown_active)
@@ -148,20 +140,35 @@ class GuiTests(unittest.TestCase):
         self.assertTrue(self.app.countdown_active)
         self.assertIn('3...', self.app.status.get())
 
-    def test_done_does_not_countdown_but_next_button_does(self):
+    def test_popup_stop_cancels_and_next_button_restarts(self):
         self.complete_first_esc()
-        buttons = self.app.dialog.winfo_children()[-1].winfo_children()
-        buttons[0].invoke()
+        self.app.dialog.winfo_children()[-1].invoke()
         self.assertIsNone(self.app.dialog)
         self.assertFalse(self.app.countdown_active)
         self.assertEqual(len(FakeProgrammer.instances), 1)
         self.app.start_button.invoke()
         self.assertTrue(self.app.countdown_active)
 
+    def test_closing_success_popup_cancels_countdown(self):
+        self.complete_first_esc()
+        self.root.tk.eval(self.app.dialog.protocol('WM_DELETE_WINDOW'))
+        self.assertIsNone(self.app.dialog)
+        self.assertFalse(self.app.countdown_active)
+        self.assertIsNone(self.app.countdown_after_id)
+        self.assertEqual(len(FakeProgrammer.instances), 1)
+
+    def test_escape_cancels_countdown(self):
+        self.complete_first_esc()
+        binding = self.app.dialog.bind('<Escape>')
+        callback = binding.split('[', 1)[1].split()[0]
+        self.root.tk.call(callback, *(['0'] * 19))
+        self.assertIsNone(self.app.dialog)
+        self.assertFalse(self.app.countdown_active)
+        self.assertEqual(len(FakeProgrammer.instances), 1)
+
     def test_muted_countdown_still_starts_and_quit_cancels(self):
         self.complete_first_esc()
         self.app.audio.play.reset_mock()
-        self.press_space()
         self.advance_countdown()
         self.assertEqual(self.app.audio.play.call_count, 0)
         timer = self.app.countdown_after_id

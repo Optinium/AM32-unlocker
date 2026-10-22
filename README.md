@@ -115,14 +115,14 @@ Keep the probe on the same ESC until success. Setup problems and unknown
 errors also keep retrying, with an explanation on screen; use Stop to
 change the MCU, probe or file selection.
 
-On verified success the LED turns green, a completion tone plays, and a
-popup says **Success - press Space for next ESC**. All programming stops
-while this popup is open. Press **Space** or click **Next ESC (Space)** to
-begin a three-second countdown: **3, 2, 1**, with one beep per second when
+On verified success the LED turns green and a success popup automatically
+starts a three-second countdown: **3, 2, 1**, with one beep per second when
 Sound is enabled. Move the probe to the next ESC during the countdown;
-programming then starts with the same settings. **Stop** cancels the
-countdown. **Done** closes the popup without restarting; the main **Next
-ESC** button also starts the countdown. The completed count is for this session.
+programming then starts automatically with the same settings. No Space press
+is needed. No programming runs while the countdown is displayed. **Stop**,
+Escape, or closing the popup cancels the countdown and finishes the batch.
+The main **Next ESC** button can restart the countdown later. The completed
+count is for this session.
 
 This checks that the selected **bootloader** was stored correctly. It does
 not check that the selected MCU/pin image suits your board, or install or

@@ -102,6 +102,7 @@ class UnlockerApp:
         self.closing = False
         self.countdown_active = False
         self.countdown_after_id = None
+        self.countdown_text = tk.StringVar()
         self.completed = 0
         self.attempts = 0
         self.generation = 0
@@ -177,7 +178,7 @@ class UnlockerApp:
                   wraplength=730).grid(row=3, column=0, sticky='w', padx=15)
         self.output = scrolledtext.ScrolledText(root, wrap=tk.WORD, height=12, state='disabled')
         self.output.grid(row=4, column=0, sticky='nsew', padx=12, pady=10)
-        self.summary('Ready. Retries continue until success or Stop. After success, press Space for the next ESC.')
+        self.summary('Ready. After verified success, a three-beep countdown automatically starts the next ESC.')
         root.after(50, self.process_events)
 
     def update_can(self, *args):
@@ -243,7 +244,7 @@ class UnlockerApp:
         self.worker.start()
 
     def begin_countdown(self):
-        if self.running or self.countdown_active or self.closing or self.dialog is not None:
+        if self.running or self.countdown_active or self.closing:
             return
         self.countdown_active = True
         self.set_controls(True)
@@ -256,9 +257,11 @@ class UnlockerApp:
             return
         if remaining == 0:
             self.countdown_active = False
+            self.close_success_dialog()
             self.start()
             return
         self.set_status('Next ESC starts in %d... Move the probe now. Stop cancels.' % remaining, 'green')
+        self.countdown_text.set('Next ESC in %d...' % remaining)
         if self.sound.get():
             self.audio.play([880 if remaining > 1 else 1100])
         self.countdown_after_id = self.root.after(1000, self.countdown_tick, remaining - 1)
@@ -269,9 +272,16 @@ class UnlockerApp:
             self.root.after_cancel(self.countdown_after_id)
             self.countdown_after_id = None
 
+    def close_success_dialog(self):
+        if self.dialog is not None:
+            self.dialog.grab_release()
+            self.dialog.destroy()
+            self.dialog = None
+
     def stop(self):
         if self.countdown_active:
             self.cancel_countdown()
+            self.close_success_dialog()
             self.set_controls(False)
             self.set_status('Countdown cancelled. The completed ESC remains verified.', 'green')
             self.summary('Countdown cancelled. Press Next ESC when ready to try again.')
@@ -311,8 +321,6 @@ class UnlockerApp:
                 self.completed += 1
                 self.update_counts()
                 self.start_button.configure(text='Next ESC', command=self.begin_countdown)
-                if self.sound.get():
-                    self.audio.play([600, 800, 1000])
                 self.show_success(data['message'])
 
     def process_events(self):
@@ -335,40 +343,21 @@ class UnlockerApp:
     def show_success(self, message):
         dialog = tk.Toplevel(self.root)
         self.dialog = dialog
-        dialog.title('Success - press Space for next ESC')
+        dialog.title('Success - next ESC starts automatically')
         dialog.transient(self.root)
         dialog.resizable(False, False)
         ttk.Label(dialog, text='ESC %d complete' % self.completed,
                   font=('Segoe UI', 14, 'bold')).pack(padx=25, pady=(20, 10))
-        ttk.Label(dialog, text=message + '\n\nPress Space for next ESC. A three-beep countdown gives you\nthree seconds to move the probe before programming starts.',
+        ttk.Label(dialog, text=message + '\n\nMove the probe to the next ESC now. Programming starts\nautomatically after the three-beep countdown.',
                   justify='center', wraplength=480).pack(padx=25, pady=10)
-        buttons = ttk.Frame(dialog)
-        buttons.pack(pady=(10, 20))
-
-        def close(next_esc=False):
-            if self.dialog is not dialog:
-                return 'break'
-            dialog.grab_release()
-            dialog.destroy()
-            self.dialog = None
-            if next_esc:
-                self.begin_countdown()
-            return 'break'
-
-        ttk.Button(buttons, text='Done', command=close).pack(side='left', padx=8)
-        ttk.Button(buttons, text='Next ESC (Space)', command=lambda: close(True)).pack(side='left', padx=8)
-        dialog.protocol('WM_DELETE_WINDOW', close)
+        ttk.Label(dialog, textvariable=self.countdown_text,
+                  font=('Segoe UI', 18, 'bold')).pack(padx=25, pady=10)
+        ttk.Button(dialog, text='Stop - finish this batch', command=self.stop).pack(pady=(10, 20))
+        dialog.protocol('WM_DELETE_WINDOW', self.stop)
         dialog.grab_set()
-        # Handle Space before a focused button's default keyboard binding, so it
-        # always means Next and cannot accidentally activate Done or start twice.
-        def bind_space(widget):
-            widget.bind('<KeyPress-space>', lambda event: 'break')
-            widget.bind('<KeyRelease-space>', lambda event: close(True))
-            for child in widget.winfo_children():
-                bind_space(child)
-
-        bind_space(dialog)
+        dialog.bind('<Escape>', lambda event: self.stop())
         dialog.after_idle(dialog.focus_set)
+        self.begin_countdown()
 
     def quit(self):
         if self.closing:
@@ -378,9 +367,7 @@ class UnlockerApp:
         if self.programmer is not None:
             self.programmer.stop.set()
         self.root.withdraw()
-        if self.dialog is not None:
-            self.dialog.destroy()
-            self.dialog = None
+        self.close_success_dialog()
         self.wait_for_exit()
 
     def wait_for_exit(self):
